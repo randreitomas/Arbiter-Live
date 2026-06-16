@@ -6,34 +6,41 @@ import fs from 'fs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const source = path.join(root, 'public', 'og-image-source.png');
+const socialCard = path.join(root, 'public', 'social-card.jpg');
 const pngOut = path.join(root, 'public', 'og-image.png');
 const jpgOut = path.join(root, 'public', 'og-image.jpg');
-const previewOut = path.join(root, 'public', 'og-preview.jpg');
 
-const BG = { r: 10, g: 12, b: 16, alpha: 1 }; // #0a0c10
+const BG = { r: 10, g: 12, b: 16, alpha: 1 };
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 630;
+const TARGET_RATIO = OG_WIDTH / OG_HEIGHT;
 
 if (!fs.existsSync(source)) {
-  console.error('Missing public/og-image-source.png — add the master artwork first.');
+  console.error('Missing public/og-image-source.png');
   process.exit(1);
 }
 
-// contain = full artwork visible, letterboxed to 1200x630 (no cropping)
-const resize = {
-  width: 1200,
-  height: 630,
-  fit: 'contain',
-  background: BG,
-};
+const meta = await sharp(source).metadata();
+const paddedWidth = Math.round(meta.height * TARGET_RATIO);
+const padTotal = Math.max(0, paddedWidth - meta.width);
+const padLeft = Math.floor(padTotal / 2);
+const padRight = padTotal - padLeft;
 
-await sharp(source).resize(resize).png({ compressionLevel: 9, quality: 92 }).toFile(pngOut);
+const padded = await sharp(source)
+  .extend({ left: padLeft, right: padRight, background: BG })
+  .png()
+  .toBuffer();
 
-await sharp(source).resize(resize).jpeg({ quality: 90, mozjpeg: true }).toFile(jpgOut);
+await sharp(padded).resize(OG_WIDTH, OG_HEIGHT).jpeg({ quality: 92, mozjpeg: true }).toFile(socialCard);
+await sharp(padded).resize(OG_WIDTH, OG_HEIGHT).jpeg({ quality: 90, mozjpeg: true }).toFile(jpgOut);
+await sharp(padded).resize(OG_WIDTH, OG_HEIGHT).png({ compressionLevel: 9 }).toFile(pngOut);
 
-await sharp(source).resize(resize).jpeg({ quality: 90, mozjpeg: true }).toFile(previewOut);
-
-const pngMeta = await sharp(pngOut).metadata();
-const jpgStat = fs.statSync(jpgOut);
-
-console.log(`og-image.png: ${pngMeta.width}x${pngMeta.height}, ${fs.statSync(pngOut).size} bytes`);
-console.log(`og-image.jpg: ${jpgStat.size} bytes`);
-console.log(`og-preview.jpg: ${fs.statSync(previewOut).size} bytes (used in og:image meta)`);
+for (const [label, file] of [
+  ['social-card.jpg', socialCard],
+  ['og-image.jpg', jpgOut],
+  ['og-image.png', pngOut],
+]) {
+  const out = await sharp(file).metadata();
+  const size = fs.statSync(file).size;
+  console.log(`${label}: ${out.width}x${out.height}, ${size} bytes`);
+}
