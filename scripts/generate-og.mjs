@@ -10,12 +10,20 @@ const pngOut = path.join(root, 'public', 'og-image.png');
 const jpgOut = path.join(root, 'public', 'og-image.jpg');
 const previewOut = path.join(root, 'public', 'og-preview.jpg');
 
+const BG = { r: 10, g: 12, b: 16, alpha: 1 }; // #0a0c10
+
 if (!fs.existsSync(source)) {
   console.error('Missing public/og-image-source.png — add the master artwork first.');
   process.exit(1);
 }
 
-const resize = { width: 1200, height: 630, fit: 'cover', position: 'centre' };
+// contain = full artwork visible, letterboxed to 1200x630 (no cropping)
+const resize = {
+  width: 1200,
+  height: 630,
+  fit: 'contain',
+  background: BG,
+};
 
 await sharp(source).resize(resize).png({ compressionLevel: 9, quality: 92 }).toFile(pngOut);
 
