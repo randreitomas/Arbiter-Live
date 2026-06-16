@@ -1,4 +1,20 @@
 {
+  "headers": [
+    {
+      "source": "/og-preview.jpg",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600" },
+        { "key": "Content-Type", "value": "image/jpeg" }
+      ]
+    },
+    {
+      "source": "/og-image.jpg",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600" },
+        { "key": "Content-Type", "value": "image/jpeg" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!.*\\..*$).*)",
