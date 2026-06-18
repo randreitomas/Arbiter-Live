@@ -27,6 +27,9 @@ interface CaseState {
   caseClosed: boolean;
   caseOutcome: 'approved' | 'rejected' | null;
 
+  /** Non-null when an [AGENT_ERROR] or case-halt arrives from the bridge. */
+  caseError: string | null;
+
   isDemoMode: boolean;
   selectedScenario: number;
 
@@ -39,6 +42,7 @@ interface CaseState {
   setHighlightedEvidence: (ids: string[]) => void;
   setStatus: (status: CaseStatus, label: string, color: string) => void;
   setTyping: (val: boolean) => void;
+  setCaseError: (message: string) => void;
   openModal: () => void;
   closeModal: () => void;
   approveCase: () => void;
@@ -62,6 +66,7 @@ const initialState = {
   modalOpen: false,
   caseClosed: false,
   caseOutcome: null as 'approved' | 'rejected' | null,
+  caseError: null as string | null,
   isDemoMode: import.meta.env.VITE_DEMO_MODE === 'true',
   selectedScenario: 1,
 };
@@ -78,7 +83,9 @@ export const useCaseStore = create<CaseState>((set) => ({
 
   addEvidence: (ev) =>
     set((state) => ({
-      evidence: [...state.evidence, ev],
+      evidence: state.evidence.find((e) => e.evidence_id === ev.evidence_id)
+        ? state.evidence
+        : [...state.evidence, ev],
     })),
 
   addMessage: (msg) =>
@@ -100,6 +107,14 @@ export const useCaseStore = create<CaseState>((set) => ({
   setStatus: (status, label, color) => set({ status, statusLabel: label, statusColor: color }),
 
   setTyping: (val) => set({ isTyping: val }),
+
+  setCaseError: (message) =>
+    set({
+      caseError: message,
+      status: 'error',
+      statusLabel: 'AGENT ERROR',
+      statusColor: '#f87171',
+    }),
 
   openModal: () => set({ modalOpen: true }),
 

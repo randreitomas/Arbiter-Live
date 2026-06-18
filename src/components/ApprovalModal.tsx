@@ -1,23 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
-import type { RecommendedAction } from '@/types';
+/**
+ * Human approval gate.
+ *
+ * The backend has no structured RecommendedAction list. The Judge's
+ * impliedActions is best-effort free text (see INTEGRATION_NOTES.md).
+ * This modal shows the full ruling and any implied actions, then
+ * requires an explicit human approve/reject decision before case closure.
+ * The approval gate itself is never removed — it is the entire point of
+ * the human-in-the-loop requirement.
+ */
+import { useEffect, useRef } from 'react';
+import type { Verdict } from '@/types';
+import { VERDICT_LABELS, VERDICT_COLORS } from '@/types';
 
 interface ApprovalModalProps {
   open: boolean;
-  actions: RecommendedAction[];
-  onApprove: (selectedIds: string[]) => void;
+  verdict: Verdict | null;
+  onApprove: () => void;
   onReject: () => void;
   onClose: () => void;
 }
 
-export function ApprovalModal({ open, actions, onApprove, onReject, onClose }: ApprovalModalProps) {
+export function ApprovalModal({ open, verdict, onApprove, onReject, onClose }: ApprovalModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (open) {
-      setSelected(new Set(actions.filter((a) => a.defaultChecked).map((a) => a.id)));
-    }
-  }, [open, actions]);
 
   useEffect(() => {
     if (!open) return;
@@ -55,14 +59,8 @@ export function ApprovalModal({ open, actions, onApprove, onReject, onClose }: A
 
   if (!open) return null;
 
-  const toggle = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const verdictColor = verdict ? VERDICT_COLORS[verdict.decision] : '#f59e0b';
+  const verdictLabel = verdict ? VERDICT_LABELS[verdict.decision] : 'VERDICT';
 
   return (
     <div
@@ -74,50 +72,55 @@ export function ApprovalModal({ open, actions, onApprove, onReject, onClose }: A
     >
       <div
         ref={modalRef}
-        className="border-2 border-amber bg-surface p-4 max-w-md w-full mx-4 shadow-lg"
+        className="border-2 border-amber bg-surface p-4 max-w-lg w-full mx-4 shadow-lg max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="approval-modal-title" className="text-[9px] text-amber mb-3 tracking-wide">
+        <h2 id="approval-modal-title" className="text-[9px] text-amber mb-1 tracking-wide shrink-0">
           ⚠ HUMAN APPROVAL REQUIRED
         </h2>
 
-        {actions.length === 0 ? (
-          <p className="text-[7px] text-muted mb-4 leading-relaxed">
-            No remediation actions recommended. Confirm case closure?
+        {verdict && (
+          <p className="text-[8px] mb-3 shrink-0" style={{ color: verdictColor }}>
+            {verdictLabel}
           </p>
-        ) : (
-          <div className="space-y-2 mb-4">
-            <p className="text-[7px] text-muted mb-2">Recommended remediation actions:</p>
-            {actions.map((action) => (
-              <label
-                key={action.id}
-                className="flex items-start gap-2 cursor-pointer group"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.has(action.id)}
-                  onChange={() => toggle(action.id)}
-                  className="mt-0.5 accent-amber"
-                  aria-label={`${action.label} for ${action.target}`}
-                />
-                <span className="text-[7px] text-body leading-relaxed group-hover:text-bright">
-                  <span className="text-amber">{action.label}</span>
-                  {' → '}
-                  <span className="text-muted">{action.target}</span>
-                </span>
-              </label>
-            ))}
-          </div>
         )}
 
-        <p className="text-[6px] text-muted mb-4 italic">
-          This action is logged and cannot be undone.
+        <div className="flex-1 overflow-y-auto mb-3 space-y-3">
+          {/* Implied actions — best-effort extraction, clearly labelled */}
+          {verdict?.impliedActions ? (
+            <div className="border border-amber/30 bg-amber/5 px-2 py-2">
+              <p className="text-[7px] text-amber mb-1 tracking-wide">
+                IMPLIED ACTIONS (parsed from ruling — best-effort)
+              </p>
+              <p className="text-[7px] text-body leading-relaxed">{verdict.impliedActions}</p>
+            </div>
+          ) : (
+            <div className="border border-border bg-surface px-2 py-2">
+              <p className="text-[7px] text-muted leading-relaxed">
+                No structured action list available. Review the full ruling below before deciding.
+              </p>
+            </div>
+          )}
+
+          {/* Full Judge ruling — verbatim */}
+          {verdict?.reasoning && (
+            <div>
+              <p className="text-[7px] text-amber mb-1 tracking-wide">FULL RULING</p>
+              <p className="text-[6px] text-muted leading-relaxed whitespace-pre-wrap">
+                {verdict.reasoning}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[6px] text-muted mb-3 italic shrink-0">
+          This decision is logged and cannot be undone. Nothing destructive executes without your sign-off.
         </p>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => onApprove([...selected])}
+            onClick={onApprove}
             className="flex-1 text-[7px] py-2 border border-green text-green hover:bg-green/10 focus-visible:outline focus-visible:outline-1 focus-visible:outline-green tracking-wide"
           >
             ✓ APPROVE

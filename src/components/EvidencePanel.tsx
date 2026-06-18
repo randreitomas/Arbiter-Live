@@ -5,6 +5,10 @@ interface EvidencePanelProps {
   highlightedIds: string[];
 }
 
+function confidencePct(conf: number): string {
+  return `${Math.round(conf * 100)}%`;
+}
+
 export function EvidencePanel({ evidence, highlightedIds }: EvidencePanelProps) {
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -14,19 +18,29 @@ export function EvidencePanel({ evidence, highlightedIds }: EvidencePanelProps) 
           <p className="text-[7px] text-muted leading-relaxed">Awaiting evidence collection...</p>
         )}
         {evidence.map((item) => {
-          const highlighted = highlightedIds.includes(item.id);
+          const highlighted = highlightedIds.includes(item.evidence_id);
           return (
             <div
-              key={item.id}
+              key={item.evidence_id}
               className={`evidence-item border px-2 py-1.5 transition-colors duration-300 ${
                 highlighted
                   ? 'border-amber bg-amber/10'
                   : 'border-border bg-surface'
               }`}
-              aria-label={`Evidence ${item.id}: ${item.text}`}
+              aria-label={`Evidence ${item.evidence_id}: ${item.fact}`}
             >
-              <span className="text-[7px] text-amber block mb-1">{item.id}</span>
-              <p className="text-[7px] text-muted leading-relaxed">{item.text}</p>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[7px] text-amber">{item.evidence_id}</span>
+                <span className="text-[6px] text-muted uppercase tracking-wide">
+                  {item.source_type} · {confidencePct(item.confidence)}
+                </span>
+              </div>
+              <p className="text-[7px] text-muted leading-relaxed">{item.fact}</p>
+              {item.citedBy.length > 0 && (
+                <p className="text-[6px] text-muted/60 mt-0.5">
+                  cited by: {item.citedBy.join(', ')}
+                </p>
+              )}
             </div>
           );
         })}

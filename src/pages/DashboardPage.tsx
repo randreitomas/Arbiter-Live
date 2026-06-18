@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApprovalModal } from '@/components/ApprovalModal';
 import { CaseBar } from '@/components/CaseBar';
@@ -8,7 +8,7 @@ import { DebateFeed } from '@/components/DebateFeed';
 import { EvidencePanel } from '@/components/EvidencePanel';
 import { JudgePanel } from '@/components/JudgePanel';
 import { ScenarioPicker } from '@/components/ScenarioPicker';
-import { useAgentStream } from '@/hooks/useAgentStream';
+import { useAgentStream, postAlertToLive } from '@/hooks/useAgentStream';
 import { useCaseStore } from '@/store/caseStore';
 
 const scenarioLabels = [
@@ -16,6 +16,78 @@ const scenarioLabels = [
   { label: 'LSASS DUMPING' },
   { label: 'IMPOSSIBLE TRAVEL' },
 ];
+
+// ── Live mode: new-case input panel ──────────────────────────────────────────
+
+interface NewCasePanelProps {
+  onCaseStarted: (caseId: string) => void;
+}
+
+function NewCasePanel({ onCaseStarted }: NewCasePanelProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [inputText, setInputText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setError(null);
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(inputText) as Record<string, unknown>;
+    } catch {
+      setError('Invalid JSON — paste a valid Alert object');
+      return;
+    }
+    if (!parsed['alert_id'] || !parsed['rule_name']) {
+      setError('Alert must include alert_id and rule_name');
+      return;
+    }
+    setSubmitting(true);
+    const result = await postAlertToLive(parsed);
+    setSubmitting(false);
+    if ('error' in result) {
+      setError(result.error);
+    } else {
+      onCaseStarted(result.alert_id);
+      setInputText('');
+    }
+  };
+
+  return (
+    <div className="border border-border bg-surface p-3">
+      <p className="text-[8px] text-amber tracking-widest mb-2">START NEW CASE</p>
+      <p className="text-[7px] text-muted mb-2 leading-relaxed">
+        Paste an Alert JSON (requires <span className="text-bright">alert_id</span> +{' '}
+        <span className="text-bright">rule_name</span>) and click Submit to post it to
+        the Band room.
+      </p>
+      <textarea
+        ref={textareaRef}
+        value={inputText}
+        onChange={(e) => setInputText(e.target.value)}
+        placeholder={'{\n  "alert_id": "ALT-001",\n  "rule_name": "PORT_SCAN_DETECTED",\n  ...\n}'}
+        rows={6}
+        className="w-full bg-black/40 border border-border text-[7px] text-body font-mono p-2 mb-2 resize-y focus:outline focus:outline-1 focus:outline-amber"
+        aria-label="Alert JSON input"
+      />
+      {error && (
+        <p className="text-[7px] text-red mb-2" role="alert">
+          ✗ {error}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={() => void handleSubmit()}
+        disabled={submitting || !inputText.trim()}
+        className="text-[7px] text-amber border border-amber/50 px-3 py-1.5 hover:bg-amber/10 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber tracking-wide"
+      >
+        {submitting ? 'SUBMITTING…' : '→ SUBMIT ALERT'}
+      </button>
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export function DashboardPage() {
   const {
@@ -33,6 +105,7 @@ export function DashboardPage() {
     modalOpen,
     caseClosed,
     caseOutcome,
+    caseError,
     selectedScenario,
     isDemoMode,
     openModal,
@@ -41,9 +114,11 @@ export function DashboardPage() {
     rejectCase,
     setScenario,
     setHighlightedEvidence,
+    resetCase,
   } = useCaseStore();
 
-  const { startDemo, clearDemoTimeouts } = useAgentStream();
+  const { connect, startDemo, clearDemoTimeouts } = useAgentStream();
+  const [showNewCase, setShowNewCase] = useState(false);
 
   const handleStart = useCallback(
     (idx: number) => {
@@ -54,7 +129,9 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
-    handleStart(selectedScenario);
+    if (isDemoMode) {
+      handleStart(selectedScenario);
+    }
     return () => clearDemoTimeouts();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -64,7 +141,17 @@ export function DashboardPage() {
   };
 
   const handleNewCase = () => {
-    handleStart(selectedScenario);
+    if (isDemoMode) {
+      handleStart(selectedScenario);
+    } else {
+      resetCase();
+      setShowNewCase(true);
+    }
+  };
+
+  const handleLiveCaseStarted = (newCaseId: string) => {
+    setShowNewCase(false);
+    connect(newCaseId);
   };
 
   const handleEvidenceClick = (id: string) => {
@@ -102,6 +189,15 @@ export function DashboardPage() {
           >
             AUDIT LOG
           </Link>
+          {!isDemoMode && !isRunning && !caseClosed && (
+            <button
+              type="button"
+              onClick={() => setShowNewCase((v) => !v)}
+              className="text-[7px] text-amber hover:text-bright focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber"
+            >
+              {showNewCase ? '✕ CANCEL' : '+ NEW CASE'}
+            </button>
+          )}
         </nav>
       </header>
 
@@ -112,6 +208,26 @@ export function DashboardPage() {
           onSelect={handleScenarioSelect}
           disabled={isRunning && !caseClosed && !verdict}
         />
+      )}
+
+      {/* Live mode: new-case panel */}
+      {!isDemoMode && showNewCase && (
+        <NewCasePanel onCaseStarted={handleLiveCaseStarted} />
+      )}
+
+      {/* Agent error banner */}
+      {caseError && (
+        <div
+          className="border border-red/60 bg-red/10 px-3 py-2"
+          role="alert"
+          aria-label="Agent error"
+        >
+          <p className="text-[7px] text-red tracking-wide mb-1">⚠ AGENT ERROR — CASE HALTED</p>
+          <p className="text-[6px] text-muted leading-relaxed line-clamp-3">{caseError}</p>
+          <p className="text-[6px] text-muted mt-1">
+            Check the System Diagnostics Agent posts in the Band room for the full traceback.
+          </p>
+        </div>
       )}
 
       <CaseBar
@@ -155,7 +271,7 @@ export function DashboardPage() {
 
       <ApprovalModal
         open={modalOpen}
-        actions={verdict?.recommendedActions ?? []}
+        verdict={verdict}
         onApprove={() => approveCase()}
         onReject={() => rejectCase()}
         onClose={closeModal}

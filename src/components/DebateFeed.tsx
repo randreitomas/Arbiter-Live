@@ -25,7 +25,7 @@ export function DebateFeed({ messages, isTyping, onEvidenceClick }: DebateFeedPr
       >
         {messages.map((msg, i) => (
           <div
-            key={`${msg.timestamp}-${i}`}
+            key={`${msg.id ?? msg.timestamp}-${i}`}
             className="debate-message border border-border bg-surface px-2 py-1.5"
             style={{ borderLeftWidth: '3px', borderLeftColor: AGENT_COLORS[msg.agent] }}
             aria-label={`${AGENT_LABELS[msg.agent]} at ${msg.timestamp}: ${msg.text}`}
@@ -41,13 +41,13 @@ export function DebateFeed({ messages, isTyping, onEvidenceClick }: DebateFeedPr
               {msg.type && (
                 <span className="text-[6px] text-muted uppercase">· {msg.type}</span>
               )}
-              {msg.mitre && (
+              {msg.mitre.length > 0 && (
                 <span className="text-[6px] text-amber border border-amber/40 px-1">
-                  {msg.mitre}
+                  {msg.mitre.join(' · ')}
                 </span>
               )}
             </div>
-            <p className="text-[7px] text-body leading-relaxed mb-1">{msg.text}</p>
+            <p className="text-[7px] text-body leading-relaxed mb-1 whitespace-pre-wrap">{msg.text}</p>
             {msg.evidenceCited.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {msg.evidenceCited.map((id) => (
