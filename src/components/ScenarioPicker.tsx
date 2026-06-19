@@ -14,15 +14,14 @@ export function ScenarioPicker({ scenarios, selected, onSelect, disabled }: Scen
           type="button"
           disabled={disabled}
           onClick={() => onSelect(i)}
-          className={`text-[7px] px-3 py-1.5 border tracking-wide transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber disabled:opacity-40 disabled:cursor-not-allowed ${
+          className={`text-xs px-4 py-1.5 rounded-full border transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber disabled:opacity-40 disabled:cursor-not-allowed ${
             selected === i
-              ? 'border-amber text-amber bg-amber/10'
-              : 'border-border text-muted hover:border-amber/50 hover:text-body'
+              ? 'border-amber text-amber bg-amber/10 font-medium'
+              : 'border-border-2 text-muted hover:border-amber/40 hover:text-body'
           }`}
           aria-pressed={selected === i}
-          aria-label={`Scenario: ${s.label}`}
         >
-          [{s.label}]
+          {s.label}
         </button>
       ))}
     </div>

@@ -5,8 +5,6 @@
  * impliedActions is best-effort free text (see INTEGRATION_NOTES.md).
  * This modal shows the full ruling and any implied actions, then
  * requires an explicit human approve/reject decision before case closure.
- * The approval gate itself is never removed — it is the entire point of
- * the human-in-the-loop requirement.
  */
 import { useEffect, useRef } from 'react';
 import type { Verdict } from '@/types';
@@ -25,32 +23,22 @@ export function ApprovalModal({ open, verdict, onApprove, onReject, onClose }: A
 
   useEffect(() => {
     if (!open) return;
-
     const modal = modalRef.current;
     if (!modal) return;
 
     const focusable = modal.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
+    focusable[0]?.focus();
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    first?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-        return;
-      }
+      if (e.key === 'Escape') { onClose(); return; }
       if (e.key !== 'Tab' || focusable.length === 0) return;
       if (e.shiftKey) {
-        if (document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        }
-      } else if (document.activeElement === last) {
-        e.preventDefault();
-        first?.focus();
-      }
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -60,11 +48,11 @@ export function ApprovalModal({ open, verdict, onApprove, onReject, onClose }: A
   if (!open) return null;
 
   const verdictColor = verdict ? VERDICT_COLORS[verdict.decision] : '#f59e0b';
-  const verdictLabel = verdict ? VERDICT_LABELS[verdict.decision] : 'VERDICT';
+  const verdictLabel = verdict ? VERDICT_LABELS[verdict.decision] : 'Verdict';
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="approval-modal-title"
@@ -72,66 +60,80 @@ export function ApprovalModal({ open, verdict, onApprove, onReject, onClose }: A
     >
       <div
         ref={modalRef}
-        className="border-2 border-amber bg-surface p-4 max-w-lg w-full mx-4 shadow-lg max-h-[80vh] flex flex-col"
+        className="panel border border-border-2 max-w-lg w-full mx-4 shadow-2xl max-h-[82vh] flex flex-col"
+        style={{ borderTopColor: verdictColor, borderTopWidth: '2px' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="approval-modal-title" className="text-[9px] text-amber mb-1 tracking-wide shrink-0">
-          ⚠ HUMAN APPROVAL REQUIRED
-        </h2>
+        {/* Header */}
+        <div className="px-5 pt-5 pb-4 border-b border-border shrink-0">
+          <div className="flex items-start justify-between mb-1">
+            <h2 id="approval-modal-title" className="text-[11px] font-semibold text-bright tracking-wide">
+              Human Approval Required
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-muted hover:text-bright transition-colors text-sm leading-none ml-3"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+          {verdict && (
+            <p className="text-sm font-bold" style={{ color: verdictColor }}>
+              {verdictLabel}
+            </p>
+          )}
+        </div>
 
-        {verdict && (
-          <p className="text-[8px] mb-3 shrink-0" style={{ color: verdictColor }}>
-            {verdictLabel}
-          </p>
-        )}
-
-        <div className="flex-1 overflow-y-auto mb-3 space-y-3">
-          {/* Implied actions — best-effort extraction, clearly labelled */}
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {verdict?.impliedActions ? (
-            <div className="border border-amber/30 bg-amber/5 px-2 py-2">
-              <p className="text-[7px] text-amber mb-1 tracking-wide">
-                IMPLIED ACTIONS (parsed from ruling — best-effort)
+            <div className="border border-amber/25 bg-amber/5 rounded-lg px-4 py-3">
+              <p className="text-[10px] text-amber font-medium uppercase tracking-widest mb-2">
+                Implied Actions <span className="text-muted normal-case">(parsed — best-effort)</span>
               </p>
-              <p className="text-[7px] text-body leading-relaxed">{verdict.impliedActions}</p>
+              <p className="text-xs text-body leading-relaxed">{verdict.impliedActions}</p>
             </div>
           ) : (
-            <div className="border border-border bg-surface px-2 py-2">
-              <p className="text-[7px] text-muted leading-relaxed">
+            <div className="border border-border rounded-lg px-4 py-3">
+              <p className="text-xs text-muted leading-relaxed">
                 No structured action list available. Review the full ruling below before deciding.
               </p>
             </div>
           )}
 
-          {/* Full Judge ruling — verbatim */}
           {verdict?.reasoning && (
             <div>
-              <p className="text-[7px] text-amber mb-1 tracking-wide">FULL RULING</p>
-              <p className="text-[6px] text-muted leading-relaxed whitespace-pre-wrap">
+              <p className="text-[10px] text-muted uppercase tracking-widest mb-2">Full Ruling</p>
+              <p className="text-xs text-body leading-relaxed whitespace-pre-wrap bg-surface-2 rounded-lg px-4 py-3 border border-border">
                 {verdict.reasoning}
               </p>
             </div>
           )}
         </div>
 
-        <p className="text-[6px] text-muted mb-3 italic shrink-0">
-          This decision is logged and cannot be undone. Nothing destructive executes without your sign-off.
-        </p>
-
-        <div className="flex gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onApprove}
-            className="flex-1 text-[7px] py-2 border border-green text-green hover:bg-green/10 focus-visible:outline focus-visible:outline-1 focus-visible:outline-green tracking-wide"
-          >
-            ✓ APPROVE
-          </button>
-          <button
-            type="button"
-            onClick={onReject}
-            className="flex-1 text-[7px] py-2 border border-red text-red hover:bg-red/10 focus-visible:outline focus-visible:outline-1 focus-visible:outline-red tracking-wide"
-          >
-            ✗ REJECT
-          </button>
+        {/* Footer */}
+        <div className="px-5 pb-5 pt-3 border-t border-border shrink-0">
+          <p className="text-[10px] text-muted mb-3">
+            This decision is logged. No destructive action executes without your sign-off.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onApprove}
+              className="flex-1 text-xs font-medium py-2.5 border border-green/60 text-green rounded-lg hover:bg-green/10 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-green"
+            >
+              ✓ Approve
+            </button>
+            <button
+              type="button"
+              onClick={onReject}
+              className="flex-1 text-xs font-medium py-2.5 border border-red/60 text-red rounded-lg hover:bg-red/10 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-red"
+            >
+              ✗ Reject
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,3 +1,6 @@
+import { Panel } from '@/components/ui/Panel';
+import { Tag } from '@/components/ui/Tag';
+import { EmptyState } from '@/components/ui/EmptyState';
 import type { Evidence } from '@/types';
 
 interface EvidencePanelProps {
@@ -9,42 +12,51 @@ function confidencePct(conf: number): string {
   return `${Math.round(conf * 100)}%`;
 }
 
+function EvidenceCard({ item, highlighted }: { item: Evidence; highlighted: boolean }) {
+  return (
+    <div
+      className={`ev-card ${highlighted ? 'highlighted' : ''}`}
+      aria-label={`Evidence ${item.evidence_id}: ${item.fact}`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <Tag variant="amber">{item.evidence_id}</Tag>
+        <span className="text-[10px] text-muted shrink-0">
+          {item.source_type} · {confidencePct(item.confidence)}
+        </span>
+      </div>
+      <p className="text-xs text-body leading-relaxed">{item.fact}</p>
+      {item.citedBy.length > 0 && (
+        <p className="text-[10px] text-muted/60 mt-1.5">
+          Cited by: {item.citedBy.join(', ')}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function EvidencePanel({ evidence, highlightedIds }: EvidencePanelProps) {
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <h2 className="text-[8px] text-amber tracking-widest mb-3 shrink-0">EVIDENCE BUNDLE</h2>
-      <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
-        {evidence.length === 0 && (
-          <p className="text-[7px] text-muted leading-relaxed">Awaiting evidence collection...</p>
-        )}
-        {evidence.map((item) => {
-          const highlighted = highlightedIds.includes(item.evidence_id);
-          return (
-            <div
-              key={item.evidence_id}
-              className={`evidence-item border px-2 py-1.5 transition-colors duration-300 ${
-                highlighted
-                  ? 'border-amber bg-amber/10'
-                  : 'border-border bg-surface'
-              }`}
-              aria-label={`Evidence ${item.evidence_id}: ${item.fact}`}
-            >
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[7px] text-amber">{item.evidence_id}</span>
-                <span className="text-[6px] text-muted uppercase tracking-wide">
-                  {item.source_type} · {confidencePct(item.confidence)}
-                </span>
-              </div>
-              <p className="text-[7px] text-muted leading-relaxed">{item.fact}</p>
-              {item.citedBy.length > 0 && (
-                <p className="text-[6px] text-muted/60 mt-0.5">
-                  cited by: {item.citedBy.join(', ')}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <Panel
+      title="Evidence Bundle"
+      titleRight={
+        evidence.length > 0 ? (
+          <span className="text-[10px] text-muted">{evidence.length} items</span>
+        ) : undefined
+      }
+      className="h-full"
+      contentClassName="p-3 space-y-2 overflow-y-auto"
+    >
+      {evidence.length === 0 ? (
+        <EmptyState icon="🔍" message="Awaiting evidence" sub="Triage agent collects first" />
+      ) : (
+        evidence.map((item) => (
+          <EvidenceCard
+            key={item.evidence_id}
+            item={item}
+            highlighted={highlightedIds.includes(item.evidence_id)}
+          />
+        ))
+      )}
+    </Panel>
   );
 }

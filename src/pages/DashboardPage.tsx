@@ -8,29 +8,107 @@ import { DebateFeed } from '@/components/DebateFeed';
 import { EvidencePanel } from '@/components/EvidencePanel';
 import { JudgePanel } from '@/components/JudgePanel';
 import { ScenarioPicker } from '@/components/ScenarioPicker';
+import { Panel } from '@/components/ui/Panel';
+import { Tag } from '@/components/ui/Tag';
 import { useAgentStream, postAlertToLive } from '@/hooks/useAgentStream';
 import { useCaseStore } from '@/store/caseStore';
 
 const scenarioLabels = [
-  { label: 'AUTHORIZED SCANNER' },
-  { label: 'LSASS DUMPING' },
-  { label: 'IMPOSSIBLE TRAVEL' },
+  { label: 'Authorized Scanner' },
+  { label: 'LSASS Dumping' },
+  { label: 'Impossible Travel' },
+];
+
+// ── Demo alert payloads (pre-fill for simulation — never sent to Band) ────────
+
+const DEMO_ALERT_JSONS: string[] = [
+  JSON.stringify({
+    alert_id: 'ALT-DEMO-001',
+    source: 'IDS',
+    rule_name: 'PORT_SCAN_DETECTED',
+    timestamp: '2026-06-19T08:14:00Z',
+    asset_id: 'SCANNER-PROD-01',
+    asset_criticality: 'low',
+    raw_payload: {
+      source_ip: '10.0.1.45',
+      targets_scanned: 847,
+      scan_type: 'TCP_SYN',
+      duration_seconds: 720,
+    },
+  }, null, 2),
+
+  JSON.stringify({
+    alert_id: 'ALT-DEMO-002',
+    source: 'EDR',
+    rule_name: 'LSASS_CREDENTIAL_DUMP',
+    timestamp: '2026-06-19T09:01:00Z',
+    asset_id: 'FINANCE-SRV-01',
+    asset_criticality: 'critical',
+    raw_payload: {
+      process: 'mimikatz.exe',
+      target_process: 'lsass.exe',
+      access_rights: '0x1FFFFF',
+      user: 'DOMAIN\\svc_backup',
+    },
+  }, null, 2),
+
+  JSON.stringify({
+    alert_id: 'ALT-DEMO-003',
+    source: 'SIEM',
+    rule_name: 'IMPOSSIBLE_TRAVEL_LOGIN',
+    timestamp: '2026-06-19T11:30:00Z',
+    asset_id: 'VPN-AUTH-01',
+    asset_criticality: 'high',
+    raw_payload: {
+      user: 'john.doe@company.com',
+      location_a: 'New York, US',
+      location_b: 'Moscow, RU',
+      time_delta_minutes: 8,
+    },
+  }, null, 2),
 ];
 
 // ── Live mode: new-case input panel ──────────────────────────────────────────
 
 interface NewCasePanelProps {
   onCaseStarted: (caseId: string) => void;
+  onDemoSelected: (idx: number) => void;
 }
 
-function NewCasePanel({ onCaseStarted }: NewCasePanelProps) {
+function NewCasePanel({ onCaseStarted, onDemoSelected }: NewCasePanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [inputText, setInputText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [demoIndex, setDemoIndex] = useState<number>(-1);
+
+  const handleDemoClick = (idx: number) => {
+    setDemoIndex(idx);
+    setInputText(DEMO_ALERT_JSONS[idx]);
+    setError(null);
+    textareaRef.current?.focus();
+  };
+
+  const handleInputChange = (value: string) => {
+    setInputText(value);
+    // If user edits the text, it's no longer a clean demo prefill
+    if (demoIndex >= 0 && value !== DEMO_ALERT_JSONS[demoIndex]) {
+      setDemoIndex(-1);
+    }
+  };
 
   const handleSubmit = async () => {
     setError(null);
+
+    // Demo path: run local simulation, never POST to Band
+    if (demoIndex >= 0) {
+      onDemoSelected(demoIndex);
+      setInputText('');
+      setDemoIndex(-1);
+      return;
+    }
+
+    // Live path: validate and POST to Band bridge
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(inputText) as Record<string, unknown>;
@@ -53,37 +131,89 @@ function NewCasePanel({ onCaseStarted }: NewCasePanelProps) {
     }
   };
 
+  const isDemo = demoIndex >= 0;
+
   return (
-    <div className="border border-border bg-surface p-3">
-      <p className="text-[8px] text-amber tracking-widest mb-2">START NEW CASE</p>
-      <p className="text-[7px] text-muted mb-2 leading-relaxed">
-        Paste an Alert JSON (requires <span className="text-bright">alert_id</span> +{' '}
-        <span className="text-bright">rule_name</span>) and click Submit to post it to
-        the Band room.
-      </p>
-      <textarea
-        ref={textareaRef}
-        value={inputText}
-        onChange={(e) => setInputText(e.target.value)}
-        placeholder={'{\n  "alert_id": "ALT-001",\n  "rule_name": "PORT_SCAN_DETECTED",\n  ...\n}'}
-        rows={6}
-        className="w-full bg-black/40 border border-border text-[7px] text-body font-mono p-2 mb-2 resize-y focus:outline focus:outline-1 focus:outline-amber"
-        aria-label="Alert JSON input"
-      />
-      {error && (
-        <p className="text-[7px] text-red mb-2" role="alert">
-          ✗ {error}
-        </p>
-      )}
-      <button
-        type="button"
-        onClick={() => void handleSubmit()}
-        disabled={submitting || !inputText.trim()}
-        className="text-[7px] text-amber border border-amber/50 px-3 py-1.5 hover:bg-amber/10 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber tracking-wide"
-      >
-        {submitting ? 'SUBMITTING…' : '→ SUBMIT ALERT'}
-      </button>
-    </div>
+    <Panel
+      title="Start New Case"
+      className="shrink-0"
+      contentClassName="p-4"
+    >
+      <div className="flex flex-col lg:flex-row gap-5">
+
+        {/* ── JSON input (left) ── */}
+        <div className="flex-1 min-w-0">
+          {isDemo && (
+            <div className="flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded bg-violet/10 border border-violet/25">
+              <Tag variant="violet">SIMULATION</Tag>
+              <span className="text-[10px] text-muted">
+                This is a local demo — no data will be sent to the Band chatroom.
+              </span>
+            </div>
+          )}
+          {!isDemo && (
+            <p className="text-xs text-muted mb-2 leading-relaxed">
+              Paste an Alert JSON with <span className="text-bright">alert_id</span> and{' '}
+              <span className="text-bright">rule_name</span>, then submit to the Band room.
+            </p>
+          )}
+          <textarea
+            ref={textareaRef}
+            value={inputText}
+            onChange={(e) => handleInputChange(e.target.value)}
+            placeholder={'{\n  "alert_id": "ALT-001",\n  "rule_name": "PORT_SCAN_DETECTED",\n  ...\n}'}
+            rows={6}
+            className={`w-full bg-surface-2 border rounded-lg text-xs text-body font-mono p-3 mb-3 resize-y transition-colors focus:outline-none ${
+              isDemo
+                ? 'border-violet/40 focus:border-violet/70'
+                : 'border-border focus:border-amber/50'
+            } placeholder:text-muted/40`}
+            aria-label="Alert JSON input"
+          />
+          {error && (
+            <p className="text-xs text-red mb-3" role="alert">✗ {error}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={submitting || !inputText.trim()}
+            className={`text-xs font-medium border rounded-lg px-4 py-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1 ${
+              isDemo
+                ? 'text-violet border-violet/40 hover:bg-violet/10 focus-visible:outline-violet'
+                : 'text-amber border-amber/40 hover:bg-amber/10 focus-visible:outline-amber'
+            }`}
+          >
+            {submitting ? 'Submitting…' : isDemo ? '▶ Run Simulation →' : 'Submit Alert →'}
+          </button>
+        </div>
+
+        {/* ── Demo shortcuts (right) ── */}
+        <div className="lg:w-52 shrink-0">
+          <p className="text-[10px] text-muted uppercase tracking-widest mb-2.5">Try a Demo</p>
+          <div className="flex flex-col gap-2">
+            {scenarioLabels.map((s, i) => (
+              <button
+                key={s.label}
+                type="button"
+                onClick={() => handleDemoClick(i)}
+                className={`text-left text-xs px-3 py-2.5 rounded-lg border transition-colors ${
+                  demoIndex === i
+                    ? 'border-violet/60 bg-violet/10 text-violet font-medium'
+                    : 'border-border-2 text-muted hover:border-violet/40 hover:text-body'
+                }`}
+              >
+                <span className="text-[10px] opacity-50 mr-1.5">{i + 1}.</span>
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted/60 mt-3 leading-relaxed">
+            Simulated end-to-end — fills the JSON above, then press Run.
+          </p>
+        </div>
+
+      </div>
+    </Panel>
   );
 }
 
@@ -121,37 +251,31 @@ export function DashboardPage() {
   const [showNewCase, setShowNewCase] = useState(false);
 
   const handleStart = useCallback(
-    (idx: number) => {
-      clearDemoTimeouts();
-      startDemo(idx);
-    },
+    (idx: number) => { clearDemoTimeouts(); startDemo(idx); },
     [clearDemoTimeouts, startDemo],
   );
 
   useEffect(() => {
-    if (isDemoMode) {
-      handleStart(selectedScenario);
-    }
+    if (isDemoMode) handleStart(selectedScenario);
     return () => clearDemoTimeouts();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleScenarioSelect = (idx: number) => {
-    setScenario(idx);
-    handleStart(idx);
-  };
+  const handleScenarioSelect = (idx: number) => { setScenario(idx); handleStart(idx); };
 
   const handleNewCase = () => {
-    if (isDemoMode) {
-      handleStart(selectedScenario);
-    } else {
-      resetCase();
-      setShowNewCase(true);
-    }
+    if (isDemoMode) handleStart(selectedScenario);
+    else { resetCase(); setShowNewCase(true); }
   };
 
   const handleLiveCaseStarted = (newCaseId: string) => {
     setShowNewCase(false);
     connect(newCaseId);
+  };
+
+  const handleDemoInLiveMode = (idx: number) => {
+    setShowNewCase(false);
+    clearDemoTimeouts();
+    startDemo(idx);
   };
 
   const handleEvidenceClick = (id: string) => {
@@ -167,40 +291,37 @@ export function DashboardPage() {
   const isRunning = !caseClosed && (messages.length > 0 || isTyping || evidence.length > 0);
 
   return (
-    <div className="font-pixel p-3 min-h-full flex flex-col gap-2 h-full">
-      <header className="flex items-center justify-between border-b border-border pb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-amber tracking-widest">→ ARBITER</span>
-          <span className="text-[7px] text-muted hidden sm:inline tracking-wide">
-            MULTI-AGENT SECURITY ADJUDICATION SYSTEM
+    <div className="font-mono p-3 sm:p-4 min-h-full flex flex-col gap-3 h-full">
+
+      {/* ── Header ── */}
+      <header className="flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <span className="font-pixel text-[10px] text-amber tracking-widest">ARBITER</span>
+          <span className="hidden sm:inline text-[11px] text-muted">
+            Multi-Agent Security Adjudication
           </span>
         </div>
-        <nav className="flex gap-3">
+        <nav className="flex items-center gap-4">
           <Link
             to="/"
-            className="text-[7px] text-muted hover:text-body focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber"
+            className="text-xs text-muted hover:text-body transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber"
           >
-            HOME
+            Home
           </Link>
-          <span className="text-[7px] text-amber">DASHBOARD</span>
-          <Link
-            to="/audit"
-            className="text-[7px] text-muted hover:text-body focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber"
-          >
-            AUDIT LOG
-          </Link>
+          <span className="text-xs font-medium text-amber">Dashboard</span>
           {!isDemoMode && !isRunning && !caseClosed && (
             <button
               type="button"
               onClick={() => setShowNewCase((v) => !v)}
-              className="text-[7px] text-amber hover:text-bright focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber"
+              className="text-xs text-amber hover:text-bright transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber"
             >
-              {showNewCase ? '✕ CANCEL' : '+ NEW CASE'}
+              {showNewCase ? '✕ Cancel' : '+ New Case'}
             </button>
           )}
         </nav>
       </header>
 
+      {/* ── Scenario picker (demo mode) ── */}
       {isDemoMode && (
         <ScenarioPicker
           scenarios={scenarioLabels}
@@ -210,48 +331,58 @@ export function DashboardPage() {
         />
       )}
 
-      {/* Live mode: new-case panel */}
+      {/* ── New case panel (live mode) ── */}
       {!isDemoMode && showNewCase && (
-        <NewCasePanel onCaseStarted={handleLiveCaseStarted} />
+        <NewCasePanel
+          onCaseStarted={handleLiveCaseStarted}
+          onDemoSelected={handleDemoInLiveMode}
+        />
       )}
 
-      {/* Agent error banner */}
+      {/* ── Error banner ── */}
       {caseError && (
         <div
-          className="border border-red/60 bg-red/10 px-3 py-2"
+          className="panel border-red/40 bg-red/5 px-4 py-3 shrink-0"
+          style={{ borderColor: 'rgba(248,81,73,0.4)' }}
           role="alert"
-          aria-label="Agent error"
         >
-          <p className="text-[7px] text-red tracking-wide mb-1">⚠ AGENT ERROR — CASE HALTED</p>
-          <p className="text-[6px] text-muted leading-relaxed line-clamp-3">{caseError}</p>
-          <p className="text-[6px] text-muted mt-1">
-            Check the System Diagnostics Agent posts in the Band room for the full traceback.
-          </p>
+          <p className="text-xs font-semibold text-red mb-1">⚠ Agent error — case halted</p>
+          <p className="text-xs text-muted leading-relaxed line-clamp-2">{caseError}</p>
         </div>
       )}
 
-      <CaseBar
-        caseId={caseId}
-        alertName={alertName}
-        statusLabel={statusLabel}
-        statusColor={statusColor}
-      />
+      {/* ── Case status bar ── */}
+      <CaseBar caseId={caseId} alertName={alertName} statusLabel={statusLabel} statusColor={statusColor} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-2 flex-1 min-h-0">
-        <div className="border border-border bg-surface p-3 min-h-[200px] lg:min-h-0 flex flex-col">
+      {/* ── Main 3-column layout ── */}
+      {/*
+        lg:grid-rows-[1fr] makes the single desktop row fill the flex-1 height,
+        giving every panel a constrained height so overflow-y-auto actually scrolls.
+        On mobile (grid-cols-1) rows are auto-height and panels stack normally.
+      */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] lg:grid-rows-[1fr] gap-3 flex-1 min-h-0">
+
+        {/* Evidence */}
+        <div className="min-h-[220px] lg:min-h-0 flex flex-col">
           <EvidencePanel evidence={evidence} highlightedIds={highlightedEvidence} />
         </div>
 
-        <div className="border border-border bg-surface p-3 flex flex-col gap-3 min-h-0">
-          <CourtroomScene activeAgents={courtroomAgents} />
-          <DebateFeed
-            messages={messages}
-            isTyping={isTyping}
-            onEvidenceClick={handleEvidenceClick}
-          />
+        {/* Courtroom + Debate */}
+        <div className="panel flex flex-col min-h-0">
+          <div className="shrink-0 border-b border-border bg-surface-2" style={{ borderRadius: '8px 8px 0 0' }}>
+            <CourtroomScene activeAgents={courtroomAgents} />
+          </div>
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <DebateFeed
+              messages={messages}
+              isTyping={isTyping}
+              onEvidenceClick={handleEvidenceClick}
+            />
+          </div>
         </div>
 
-        <div className="border border-border bg-surface p-3 min-h-[200px] lg:min-h-0 flex flex-col">
+        {/* Judge */}
+        <div className="min-h-[220px] lg:min-h-0 flex flex-col">
           <JudgePanel
             claims={claims}
             verdict={verdict}
@@ -261,6 +392,7 @@ export function DashboardPage() {
         </div>
       </div>
 
+      {/* ── Closed banner ── */}
       {caseClosed && caseOutcome && (
         <ClosedBanner
           outcome={caseOutcome}
@@ -269,6 +401,7 @@ export function DashboardPage() {
         />
       )}
 
+      {/* ── Approval modal ── */}
       <ApprovalModal
         open={modalOpen}
         verdict={verdict}

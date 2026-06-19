@@ -11,27 +11,23 @@ const DEVELOPERS = [
 
 export function LandingFooter() {
   return (
-    <footer id="demo" className="border-t border-border py-10 px-4 sm:px-6">
-      <div className="max-w-6xl mx-auto flex flex-col gap-6">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center justify-center gap-2 label-text">
-            <span className="wordmark text-[8px]">ARBITER</span>
-            <span>·</span>
-            <span>Band of Agents Hackathon 2025</span>
-            <span>·</span>
-            <span>Built with Band, LangChain, CrewAI</span>
+    <footer className="border-t border-border py-12 px-5 sm:px-8">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-8">
+          <div>
+            <p className="font-pixel text-[10px] text-amber tracking-widest mb-1">ARBITER</p>
+            <p className="text-[12px] text-muted">
+              Band of Agents Hackathon · Built with Band, LangChain, CrewAI
+            </p>
           </div>
-          <Link
-            to="/dashboard"
-            className="label-text text-amber border border-amber px-4 py-2 hover:bg-amber/10 transition-colors shrink-0"
-          >
-            [ → Try the Demo ]
+          <Link to="/dashboard" className="btn-ghost shrink-0">
+            Try the Demo →
           </Link>
         </div>
 
-        <div className="text-center border-t border-border pt-6">
-          <p className="label-text uppercase tracking-widest mb-3">Developed by</p>
-          <p className="body-text">
+        <div className="border-t border-border pt-6 text-center">
+          <p className="text-[11px] text-muted uppercase tracking-widest mb-2">Developed by</p>
+          <p className="text-[12px] text-muted/70">
             {DEVELOPERS.join(' · ')}
           </p>
         </div>

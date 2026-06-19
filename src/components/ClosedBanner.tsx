@@ -9,34 +9,29 @@ export function ClosedBanner({ outcome, timestamp, onNewCase }: ClosedBannerProp
 
   return (
     <div
-      className={`flex items-center justify-between border px-3 py-2 mt-2 ${
-        approved ? 'border-green bg-green/5' : 'border-red bg-red/5'
+      className={`flex items-center justify-between panel px-4 py-3 shrink-0 ${
+        approved ? 'border-green/40 bg-green/5' : 'border-red/40 bg-red/5'
       }`}
+      style={{ borderWidth: '1px' }}
       role="status"
-      aria-label={approved ? 'Case closed' : 'Actions rejected'}
     >
       <div>
-        <p
-          className={`text-[8px] tracking-wide mb-0.5 ${approved ? 'text-green' : 'text-red'}`}
-        >
-          {approved
-            ? '✓ CASE CLOSED — INVESTIGATION COMPLETE'
-            : '✗ ACTIONS REJECTED — NO CHANGES EXECUTED'}
+        <p className={`text-xs font-semibold mb-0.5 ${approved ? 'text-green' : 'text-red'}`}>
+          {approved ? '✓ Case closed — investigation complete' : '✗ Actions rejected — no changes executed'}
         </p>
-        <p className="text-[6px] text-muted">
-          {timestamp} · Analyst: auto-adjudication pipeline ·{' '}
+        <p className="text-[10px] text-muted">
+          {timestamp} ·{' '}
           {approved
             ? 'Remediation actions approved and queued'
-            : 'No changes executed — case flagged for manual review'}
+            : 'No changes executed — flagged for manual review'}
         </p>
       </div>
       <button
         type="button"
         onClick={onNewCase}
-        className="text-[7px] text-amber border border-amber/50 px-3 py-1.5 hover:bg-amber/10 focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber tracking-wide shrink-0 ml-4"
-        aria-label="Start new case"
+        className="text-xs font-medium text-amber border border-amber/40 px-4 py-1.5 rounded-lg hover:bg-amber/10 transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-amber shrink-0 ml-4"
       >
-        ↺ NEW CASE
+        ↺ New Case
       </button>
     </div>
   );
